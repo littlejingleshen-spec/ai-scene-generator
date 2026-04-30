@@ -594,9 +594,9 @@
                 return;
             }
             
-            // 显示预览并转为base64
+            // 显示预览
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 const previewImg = document.getElementById('previewImg');
                 const uploadContent = document.querySelector('.upload-content');
                 
@@ -607,10 +607,51 @@
                 uploadArea.classList.add('has-image');
                 currentOriginalImageUrl = e.target.result;
                 
-                // 直接用base64作为图片数据，不需要图床
-                uploadedImageUrl = e.target.result;
-                document.getElementById('uploadStatus').innerHTML = '✅ 图片已加载';
-                showToast('图片已加载');
+                // 上传到国内图床获取URL
+                document.getElementById('uploadStatus').innerHTML = '⏳ 正在上传图片...';
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    // 使用telegraph图床（国内可访问）
+                    const uploadResp = await fetch('https://telegra.ph/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const uploadData = await uploadResp.json();
+                    
+                    if (uploadData && uploadData[0] && uploadData[0].src) {
+                        uploadedImageUrl = 'https://telegra.ph' + uploadData[0].src;
+                        document.getElementById('uploadStatus').innerHTML = '✅ 图片上传成功';
+                        showToast('图片上传成功');
+                    } else {
+                        throw new Error('上传返回异常');
+                    }
+                } catch (error) {
+                    console.error('图床上传失败:', error);
+                    // 备用方案：用sm.ms图床
+                    try {
+                        const formData2 = new FormData();
+                        formData2.append('smfile', file);
+                        const resp2 = await fetch('https://sm.ms/api/v2/upload', {
+                            method: 'POST',
+                            body: formData2
+                        });
+                        const data2 = await resp2.json();
+                        if (data2.success && data2.data && data2.data.url) {
+                            uploadedImageUrl = data2.data.url;
+                            document.getElementById('uploadStatus').innerHTML = '✅ 图片上传成功';
+                            showToast('图片上传成功');
+                        } else {
+                            throw new Error('备用图床也失败');
+                        }
+                    } catch (error2) {
+                        console.error('备用图床也失败:', error2);
+                        uploadedImageUrl = null;
+                        document.getElementById('uploadStatus').innerHTML = '⚠️ 图片上传失败，将使用纯文字模式生成（建议在提示词中详细描述商品外观）';
+                        showToast('图片上传失败，将使用纯文字模式');
+                    }
+                }
             };
             reader.readAsDataURL(file);
         }
