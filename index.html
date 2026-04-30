@@ -598,7 +598,7 @@
             
             // 压缩图片并转为base64
             try {
-                const compressedBase64 = await compressImage(file, 1024, 0.85);
+                const compressedBase64 = await compressImage(file, 1024, 0.85); // 1024px宽 + 85%质量，实测API可接受
                 
                 // 显示预览
                 const previewImg = document.getElementById('previewImg');
