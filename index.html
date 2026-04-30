@@ -594,66 +594,66 @@
                 return;
             }
             
-            // 显示预览
-            const reader = new FileReader();
-            reader.onload = async function(e) {
+            document.getElementById('uploadStatus').innerHTML = '⏳ 正在压缩图片...';
+            
+            // 压缩图片并转为base64
+            try {
+                const compressedBase64 = await compressImage(file, 1024, 0.85);
+                
+                // 显示预览
                 const previewImg = document.getElementById('previewImg');
                 const uploadContent = document.querySelector('.upload-content');
                 
-                previewImg.src = e.target.result;
+                previewImg.src = compressedBase64;
                 previewImg.style.display = 'block';
                 uploadContent.style.display = 'none';
                 
                 uploadArea.classList.add('has-image');
-                currentOriginalImageUrl = e.target.result;
+                currentOriginalImageUrl = compressedBase64;
                 
-                // 上传到国内图床获取URL
-                document.getElementById('uploadStatus').innerHTML = '⏳ 正在上传图片...';
-                try {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    
-                    // 使用telegraph图床（国内可访问）
-                    const uploadResp = await fetch('https://telegra.ph/upload', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    const uploadData = await uploadResp.json();
-                    
-                    if (uploadData && uploadData[0] && uploadData[0].src) {
-                        uploadedImageUrl = 'https://telegra.ph' + uploadData[0].src;
-                        document.getElementById('uploadStatus').innerHTML = '✅ 图片上传成功';
-                        showToast('图片上传成功');
-                    } else {
-                        throw new Error('上传返回异常');
-                    }
-                } catch (error) {
-                    console.error('图床上传失败:', error);
-                    // 备用方案：用sm.ms图床
-                    try {
-                        const formData2 = new FormData();
-                        formData2.append('smfile', file);
-                        const resp2 = await fetch('https://sm.ms/api/v2/upload', {
-                            method: 'POST',
-                            body: formData2
-                        });
-                        const data2 = await resp2.json();
-                        if (data2.success && data2.data && data2.data.url) {
-                            uploadedImageUrl = data2.data.url;
-                            document.getElementById('uploadStatus').innerHTML = '✅ 图片上传成功';
-                            showToast('图片上传成功');
-                        } else {
-                            throw new Error('备用图床也失败');
+                uploadedImageUrl = compressedBase64;
+                document.getElementById('uploadStatus').innerHTML = '✅ 图片已准备就绪';
+                showToast('图片已准备就绪');
+            } catch (error) {
+                console.error('图片处理失败:', error);
+                document.getElementById('uploadStatus').innerHTML = '⚠️ 图片处理失败';
+                showToast('图片处理失败，请重试');
+            }
+        }
+        
+        // 压缩图片：限制最大尺寸，降低质量，减小base64体积
+        function compressImage(file, maxWidth, quality) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        
+                        // 限制最大宽度
+                        if (width > maxWidth) {
+                            height = Math.round(height * maxWidth / width);
+                            width = maxWidth;
                         }
-                    } catch (error2) {
-                        console.error('备用图床也失败:', error2);
-                        uploadedImageUrl = null;
-                        document.getElementById('uploadStatus').innerHTML = '⚠️ 图片上传失败，将使用纯文字模式生成（建议在提示词中详细描述商品外观）';
-                        showToast('图片上传失败，将使用纯文字模式');
-                    }
-                }
-            };
-            reader.readAsDataURL(file);
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        // 输出为JPEG，降低质量
+                        const base64 = canvas.toDataURL('image/jpeg', quality);
+                        resolve(base64);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
         }
         
         // 清除图片
