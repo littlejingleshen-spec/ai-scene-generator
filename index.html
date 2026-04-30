@@ -886,16 +886,25 @@
                     const response = await fetch(url);
                     const result = await response.json();
                     
-                    if (result.code === 2) {
-                        // 成功
-                        clearInterval(pollingInterval);
-                        showSuccess(result.data);
-                    } else if (result.code === 3) {
-                        // 失败
-                        clearInterval(pollingInterval);
-                        showError(result.data?.message || '生成失败');
+                    if (result.code === 200 && result.data) {
+                        const status = result.data.status;
+                        
+                        if (status === 2) {
+                            // 生成成功，result是图片URL数组
+                            clearInterval(pollingInterval);
+                            const imageUrl = result.data.result && result.data.result[0];
+                            if (imageUrl) {
+                                showSuccess(imageUrl);
+                            } else {
+                                showError('生成完成但未返回图片');
+                            }
+                        } else if (status === 3) {
+                            // 生成失败
+                            clearInterval(pollingInterval);
+                            showError(result.data.message || '生成失败');
+                        }
+                        // status=0 或 1 继续轮询
                     }
-                    // code=0 或 code=1 继续轮询
                     
                 } catch (error) {
                     console.error('查询失败:', error);
