@@ -419,18 +419,40 @@
             </p>
         </div>
         
-        <!-- 图片上传 -->
+        <!-- 商品图（支持URL或上传） -->
         <div class="card">
-            <div class="card-title">上传商品图</div>
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-content">
-                    <div class="upload-icon">📷</div>
-                    <div class="upload-text">点击或拖拽上传商品图片</div>
-                    <div class="upload-hint">支持 JPG、PNG 格式</div>
-                </div>
-                <img id="previewImg" class="preview-image" style="display: none;" />
+            <div class="card-title">商品图</div>
+            
+            <!-- 方式切换 -->
+            <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+                <button id="tabUrl" onclick="switchImageMode('url')" style="flex:1; padding: 10px; border: 2px solid #667eea; background: #667eea; color: white; border-radius: 8px; cursor: pointer; font-size: 0.95rem;">🔗 输入图片URL</button>
+                <button id="tabUpload" onclick="switchImageMode('upload')" style="flex:1; padding: 10px; border: 2px solid #e0e0e0; background: white; color: #666; border-radius: 8px; cursor: pointer; font-size: 0.95rem;">📷 上传图片</button>
             </div>
-            <input type="file" id="fileInput" accept="image/jpeg,image/png" />
+            
+            <!-- URL输入模式 -->
+            <div id="urlMode">
+                <input type="text" id="imageUrlInput" placeholder="粘贴商品图片URL，例如：https://xxx.com/product.jpg" 
+                    style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 0.95rem; outline: none;"
+                    onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e0e0e0'" />
+                <div style="margin-top: 8px; font-size: 0.85rem; color: #999;">
+                    💡 在电商网站右键商品图 → 复制图片地址，粘贴到这里即可
+                </div>
+                <img id="urlPreviewImg" style="display: none; max-height: 200px; margin-top: 12px; border-radius: 8px; border: 1px solid #eee;" />
+            </div>
+            
+            <!-- 上传模式 -->
+            <div id="uploadMode" style="display: none;">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-content">
+                        <div class="upload-icon">📷</div>
+                        <div class="upload-text">点击或拖拽上传商品图片</div>
+                        <div class="upload-hint">支持 JPG、PNG 格式（会自动压缩）</div>
+                    </div>
+                    <img id="previewImg" class="preview-image" style="display: none;" />
+                </div>
+                <input type="file" id="fileInput" accept="image/jpeg,image/png" />
+            </div>
+            
             <div id="uploadStatus" style="margin-top: 10px; font-size: 0.9rem; color: #666;"></div>
         </div>
         
@@ -515,6 +537,58 @@
         let currentOriginalImageUrl = null;
         let pollingInterval = null;
         let history = [];
+        let imageMode = 'url'; // 'url' 或 'upload'
+        
+        // 切换图片输入模式
+        function switchImageMode(mode) {
+            imageMode = mode;
+            const tabUrl = document.getElementById('tabUrl');
+            const tabUpload = document.getElementById('tabUpload');
+            const urlMode = document.getElementById('urlMode');
+            const uploadMode = document.getElementById('uploadMode');
+            
+            if (mode === 'url') {
+                tabUrl.style.background = '#667eea';
+                tabUrl.style.color = 'white';
+                tabUrl.style.borderColor = '#667eea';
+                tabUpload.style.background = 'white';
+                tabUpload.style.color = '#666';
+                tabUpload.style.borderColor = '#e0e0e0';
+                urlMode.style.display = 'block';
+                uploadMode.style.display = 'none';
+            } else {
+                tabUpload.style.background = '#667eea';
+                tabUpload.style.color = 'white';
+                tabUpload.style.borderColor = '#667eea';
+                tabUrl.style.background = 'white';
+                tabUrl.style.color = '#666';
+                tabUrl.style.borderColor = '#e0e0e0';
+                urlMode.style.display = 'none';
+                uploadMode.style.display = 'block';
+            }
+        }
+        
+        // URL预览
+        function setupUrlPreview() {
+            const input = document.getElementById('imageUrlInput');
+            const preview = document.getElementById('urlPreviewImg');
+            let debounceTimer;
+            input.addEventListener('input', function() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const url = input.value.trim();
+                    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                        preview.src = url;
+                        preview.style.display = 'block';
+                        preview.onerror = function() {
+                            preview.style.display = 'none';
+                        };
+                    } else {
+                        preview.style.display = 'none';
+                    }
+                }, 500);
+            });
+        }
         
         // API 配置
         const API_BASE = 'https://api.wuyinkeji.com/api/async';
@@ -543,6 +617,9 @@
             
             // 设置模板按钮
             setupTemplateButtons();
+            
+            // 设置URL预览
+            setupUrlPreview();
             
             // 监听 API Key 保存
             document.getElementById('apiKey').addEventListener('change', function() {
@@ -734,9 +811,23 @@
                     size: document.querySelector('input[name="size"]:checked').value
                 };
                 
-                // 如果有上传图片，添加到请求中
-                if (uploadedImageUrl) {
-                    requestData.urls = [uploadedImageUrl];
+                // 根据模式获取图片
+                let imageUrl = null;
+                if (imageMode === 'url') {
+                    imageUrl = document.getElementById('imageUrlInput').value.trim();
+                    if (imageUrl && !imageUrl.startsWith('http')) {
+                        showToast('请输入正确的图片URL（以http开头）');
+                        document.getElementById('generateBtn').disabled = false;
+                        document.getElementById('generateBtn').innerHTML = '<span>✨</span> 生成场景图';
+                        return;
+                    }
+                } else {
+                    imageUrl = uploadedImageUrl; // 上传模式用base64
+                }
+                
+                // 如果有图片，添加到请求中
+                if (imageUrl) {
+                    requestData.urls = [imageUrl];
                 }
                 
                 // 提交任务
