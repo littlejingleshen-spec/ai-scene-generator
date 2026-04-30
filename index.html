@@ -870,7 +870,7 @@
             }
             
             let pollCount = 0;
-            const maxPolls = 60; // 最多查询60次（2分钟）
+            const maxPolls = 90; // 最多查询90次（3分钟）
             
             pollingInterval = setInterval(async () => {
                 pollCount++;
@@ -886,11 +886,13 @@
                     const response = await fetch(url);
                     const result = await response.json();
                     
+                    console.log('查询结果:', JSON.stringify(result));
+                    
                     if (result.code === 200 && result.data) {
-                        const status = result.data.status;
+                        const taskStatus = result.data.status;
                         
-                        if (status === 2) {
-                            // 生成成功，result是图片URL数组
+                        if (taskStatus === 2 || taskStatus === '2') {
+                            // 生成成功
                             clearInterval(pollingInterval);
                             const imageUrl = result.data.result && result.data.result[0];
                             if (imageUrl) {
@@ -898,12 +900,14 @@
                             } else {
                                 showError('生成完成但未返回图片');
                             }
-                        } else if (status === 3) {
+                        } else if (taskStatus === 3 || taskStatus === '3') {
                             // 生成失败
                             clearInterval(pollingInterval);
                             showError(result.data.message || '生成失败');
                         }
                         // status=0 或 1 继续轮询
+                    } else if (result.code !== 200) {
+                        console.error('查询返回非200:', result);
                     }
                     
                 } catch (error) {
